@@ -1,0 +1,4641 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OpenAsy Live Chat API",
+    "version": "0.1.0",
+    "summary": "A chat window on your site from one script tag, answered by your team in the browser, with the visitor's pages from Analytics.",
+    "description": "Every screen of Live Chat uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nThe window on a site's pages loads `/w/<site>.js` and talks to `/api/v1/widget/*` from pages of the site's hosts (CORS), with the chat's token once a chat starts. Sites, hours, teams, routing rules, the window's look and the links to Helpdesk, Analytics, CRM and Knowledge Base come from the settings file, never the API. Everything else takes the session of a signed-in person or an API token, and each operation names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003).\n\nBoth the team's screens and the window follow chats with Server-Sent Events whose ids are the events' sequence numbers, and resume after them.\n\nCRM is sent leads with `POST <crm.url>/api/v1/leads`; the request and the answer are described here as `CrmLeadRequest` and `CrmLeadCreated`.\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
+    "license": {
+      "name": "AGPL-3.0-only",
+      "identifier": "AGPL-3.0-only"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This Live Chat"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Chats",
+      "description": "Chats, their lines, files, hand-overs, tickets and leads."
+    },
+    {
+      "name": "Window",
+      "description": "What the window on a site's pages calls."
+    },
+    {
+      "name": "Team",
+      "description": "Who answers, and who is available."
+    },
+    {
+      "name": "Reports",
+      "description": "Today, and a period's chats by page and hour, first answers, tickets and leads."
+    },
+    {
+      "name": "Product",
+      "description": "Version, settings, links and health."
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "liveness",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Liveness",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The process is running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readiness",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Readiness",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The database answers and the settings are applied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not ready: the database or the settings are not there.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "metrics",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Prometheus metrics",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Metrics in the Prometheus text format.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/version": {
+      "get": {
+        "operationId": "version",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Product and version",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "This product and its version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "operationId": "products",
+        "tags": [
+          "Product"
+        ],
+        "summary": "The install's other products",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "From OPENASY_PRODUCTS, for the product switcher.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Products"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "operationId": "settings",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Settings, as the file sets them",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "There is no route that changes them: the settings file is the only way in. Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Settings"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/integrations": {
+      "get": {
+        "operationId": "integrations",
+        "tags": [
+          "Product"
+        ],
+        "summary": "The links to Helpdesk, Analytics, CRM and Knowledge Base",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Whether each is linked, its secret is set, and when it last worked or failed. Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Integrations"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/team": {
+      "get": {
+        "operationId": "team",
+        "tags": [
+          "Team"
+        ],
+        "summary": "The team now",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Members who answer chats, their teams, open chats, and whether they are available. Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Team"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "operationId": "me",
+        "tags": [
+          "Team"
+        ],
+        "summary": "Who is signed in",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/me/away": {
+      "put": {
+        "operationId": "setAway",
+        "tags": [
+          "Team"
+        ],
+        "summary": "Away or available",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Away members are not counted as available, so the window says an answer may take longer. Needs the editor role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Away"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "editor",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Away"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/overview": {
+      "get": {
+        "operationId": "overview",
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Today",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Chats today, the first answer, chats that became tickets or leads, chats per hour against the same day last week, the pages they started on, and the team now. Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer"
+      }
+    },
+    "/api/v1/report": {
+      "get": {
+        "operationId": "report",
+        "tags": [
+          "Reports"
+        ],
+        "summary": "A period's report",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Chats by page and by hour, the time to the first answer, and chats that became tickets or leads, overall and by team. Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Report"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "description": "The period: 7, 30 or 90 days. Default 30.",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                7,
+                30,
+                90
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/chats": {
+      "get": {
+        "operationId": "listChats",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Chats",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Open chats: the oldest unanswered first. Closed: the newest first. Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "open",
+                "closed",
+                "all"
+              ],
+              "default": "open"
+            }
+          },
+          {
+            "name": "team",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "A name, an email, a page, a number, or words said.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/chats/{number}": {
+      "get": {
+        "operationId": "getChat",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "A chat",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "With everything said, the pages the window saw, suggested articles and the team's saved answers. Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "description": "The chat's number, such as 12.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/chats/{number}/visitor": {
+      "get": {
+        "operationId": "getVisitor",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "The visitor beside the chat",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Their visit from Analytics, when it is linked and the window sent its ids: where they came from and the pages they read. Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "description": "The chat's number, such as 12.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/chats/{number}/messages": {
+      "post": {
+        "operationId": "sendMessage",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Answer",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "The first member to answer takes the chat. With client_id, sending the same line again answers 200 with the one added before. Needs the editor role.",
+        "responses": {
+          "201": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Line"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "200": {
+            "description": "The same client_id again: the line added before, not added twice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Line"
+                }
+              }
+            }
+          }
+        },
+        "x-openasy-role": "editor",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "description": "The chat's number, such as 12.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentMessage"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{number}/files": {
+      "post": {
+        "operationId": "sendFile",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Send a file",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "The body is the file itself, with its type as content-type, its name in x-file-name (URI-encoded) and an optional x-client-id. Only the types and size in files are taken, and only when the bytes are that type. Needs the editor role.",
+        "responses": {
+          "201": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Line"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "200": {
+            "description": "The same client_id again: the line added before, not added twice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Line"
+                }
+              }
+            }
+          }
+        },
+        "x-openasy-role": "editor",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "description": "The chat's number, such as 12.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{number}/assign": {
+      "post": {
+        "operationId": "assignChat",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Hand to a colleague",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "To a member, another team, or both, with everything said so far. The visitor is told who answers now; the note stays with the team. Needs the editor role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "editor",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "description": "The chat's number, such as 12.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Assign"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/chats/{number}/close": {
+      "post": {
+        "operationId": "closeChat",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Close the chat",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Needs the editor role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "editor",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "description": "The chat's number, such as 12.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/chats/{number}/ticket": {
+      "post": {
+        "operationId": "makeTicket",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Make a Helpdesk ticket",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "With the whole chat; what is said afterwards goes to the ticket too. When Helpdesk cannot be reached, ticket.error says why and it is tried again. Needs the editor role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "editor",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "description": "The chat's number, such as 12.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/chats/{number}/lead": {
+      "post": {
+        "operationId": "makeLead",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Open a lead in CRM",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "With the chat, the pages read and the agent as its owner (CrmLeadRequest). Only when crm is linked. Needs the editor role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "502": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "editor",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "description": "The chat's number, such as 12.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/questions": {
+      "get": {
+        "operationId": "listQuestions",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Questions outside working hours",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Each becomes a Helpdesk ticket. Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Questions"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "description": "The period: 7, 30 or 90 days. Default 30.",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                7,
+                30,
+                90
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/files/{id}": {
+      "get": {
+        "operationId": "getFile",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "A file from a chat",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Plain images are shown inline; anything else is downloaded, in a sandbox. Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/gif": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/stream": {
+      "get": {
+        "operationId": "teamStream",
+        "tags": [
+          "Chats"
+        ],
+        "summary": "Every chat, as it happens",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "description": "Server-Sent Events: `line` and `chat` events, each with `id:` its sequence number. Reconnect with Last-Event-ID (EventSource does) or ?after= to get what was missed, once. `event: reset` means the client is too far behind: load the chats again. Members who answer chats count as available while it is open. Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "The stream.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "x-openasy-role": "viewer",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "description": "The sequence number of the last event seen; Last-Event-ID wins when both are sent. Default 0.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "description": "Sent by EventSource when it reconnects.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/w/{site}.js": {
+      "get": {
+        "operationId": "windowScript",
+        "tags": [
+          "Window"
+        ],
+        "summary": "The window's script",
+        "security": [],
+        "description": "`<script src=\".../w/<site>.js\" defer></script>` on every page of the site. It carries the site's settings and may be cached for five minutes. On sites with consent, it waits for Consent's answer before it shows anything.",
+        "parameters": [
+          {
+            "name": "site",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The script.",
+            "content": {
+              "text/javascript": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such site; a comment that says so.",
+            "content": {
+              "text/javascript": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not built; a comment that says so.",
+            "content": {
+              "text/javascript": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/widget/state": {
+      "get": {
+        "operationId": "windowState",
+        "tags": [
+          "Window"
+        ],
+        "summary": "Open now?",
+        "description": "Whether the window offers a chat now, when it opens next, and how many are answering. Pages of the sites' hosts only (CORS); nothing about the visitor is sent or kept.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WidgetState"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/widget/suggest": {
+      "get": {
+        "operationId": "windowSuggest",
+        "tags": [
+          "Window"
+        ],
+        "summary": "Articles for what is typed",
+        "description": "From Knowledge Base, before a chat starts. Nothing is kept.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Suggested"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "lang",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/widget/chats": {
+      "post": {
+        "operationId": "startChat",
+        "tags": [
+          "Window"
+        ],
+        "summary": "Start a chat",
+        "description": "Only in working hours (409 closed outside them). The page's rule picks the team. Up to 6 a minute from one address.",
+        "security": [],
+        "responses": {
+          "201": {
+            "description": "Started.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatStarted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartChat"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/widget/questions": {
+      "post": {
+        "operationId": "askQuestion",
+        "tags": [
+          "Window"
+        ],
+        "summary": "A question outside working hours",
+        "description": "It becomes a Helpdesk ticket, answered by email. Up to 5 a minute from one address and 5 an hour from one email.",
+        "security": [],
+        "responses": {
+          "202": {
+            "description": "Taken.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionReceived"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskQuestion"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/widget/chat": {
+      "get": {
+        "operationId": "visitorChat",
+        "tags": [
+          "Window"
+        ],
+        "summary": "The visitor's chat",
+        "description": "Everything shown to the visitor, and the last event's number to stream from.",
+        "security": [
+          {
+            "chatToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorChat"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "visitorDetails",
+        "tags": [
+          "Window"
+        ],
+        "summary": "The visitor's name and email",
+        "description": "An email lets a chat no one answered become a ticket answered by email.",
+        "security": [
+          {
+            "chatToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorState"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitorDetails"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/widget/messages": {
+      "post": {
+        "operationId": "visitorMessage",
+        "tags": [
+          "Window"
+        ],
+        "summary": "Write",
+        "description": "With client_id, sending the same line again answers 200 with the one added before, so a retry after a dropped connection adds it once. Up to 40 a minute.",
+        "security": [
+          {
+            "chatToken": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorLine"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "200": {
+            "description": "The same client_id again: the line added before, not added twice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorLine"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitorMessage"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/widget/files": {
+      "post": {
+        "operationId": "visitorFile",
+        "tags": [
+          "Window"
+        ],
+        "summary": "Send a file",
+        "description": "The body is the file itself, with its type as content-type, its name in x-file-name (URI-encoded) and x-client-id. Only the types and size in files are taken, and only when the bytes are that type. Up to 10 a minute.",
+        "security": [
+          {
+            "chatToken": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Added.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorLine"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "415": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "200": {
+            "description": "The same client_id again: the line added before, not added twice.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorLine"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/widget/files/{id}/{sig}": {
+      "get": {
+        "operationId": "visitorFileGet",
+        "tags": [
+          "Window"
+        ],
+        "summary": "A file of the chat",
+        "description": "By the signed link the window was given. Plain images are shown inline; anything else is downloaded, in a sandbox.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/gif": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sig",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/widget/pages": {
+      "post": {
+        "operationId": "visitorPage",
+        "tags": [
+          "Window"
+        ],
+        "summary": "The page the visitor is on",
+        "description": "While the chat is open.",
+        "security": [
+          {
+            "chatToken": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Noted."
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitorPage"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/widget/close": {
+      "post": {
+        "operationId": "visitorClose",
+        "tags": [
+          "Window"
+        ],
+        "summary": "End the chat",
+        "description": "A chat that ends on a question no one answered becomes a Helpdesk ticket.",
+        "security": [
+          {
+            "chatToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisitorState"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/widget/stream": {
+      "get": {
+        "operationId": "visitorStream",
+        "tags": [
+          "Window"
+        ],
+        "summary": "The chat, as it happens",
+        "description": "Server-Sent Events of the visitor's chat: `line` and `chat` events with `id:` their sequence number. Resume with ?after= or Last-Event-ID. Read it with fetch, so the token goes in a header. Up to 6 open at once for a chat.",
+        "security": [
+          {
+            "chatToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The stream.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "429": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "description": "The sequence number of the last event seen; Last-Event-ID wins when both are sent. Default 0.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "description": "Sent by EventSource when it reconnects.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-openasy-session",
+        "description": "The browser session after signing in (`openasy-session` when Live Chat runs on plain http://localhost). Requests that change something must come from the Live Chat origin."
+      },
+      "apiToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An API token created under Settings, API tokens (`oa_live-chat_...`): one role, always an expiry (ADR 0003)."
+      },
+      "adminToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Only when Live Chat is started by its tests or a local script: one shared token with the admin role. A production install does not have it."
+      },
+      "chatToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "The token POST /api/v1/widget/chats returned: one chat's, for the visitor's window."
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "An error, as RFC 9457 Problem Details.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid-token",
+              "invalid-json",
+              "invalid-body",
+              "forbidden-origin",
+              "not-found",
+              "conflict",
+              "closed",
+              "rate-limited",
+              "payload-too-large",
+              "unsupported-type",
+              "not-linked",
+              "link-failed",
+              "unavailable",
+              "internal-error",
+              "unauthenticated",
+              "invalid-credentials",
+              "mfa-required",
+              "mfa-setup-required",
+              "forbidden",
+              "cross-site"
+            ],
+            "description": "Stable; match on this."
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "additionalProperties": true
+      },
+      "Status": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "Version": {
+        "type": "object",
+        "properties": {
+          "product": {
+            "const": "live-chat"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "product",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "Products": {
+        "type": "object",
+        "properties": {
+          "products": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "url"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "products"
+        ],
+        "additionalProperties": false
+      },
+      "ConfigFile": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "appliedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "warnings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "path",
+              "appliedAt",
+              "error",
+              "warnings"
+            ],
+            "additionalProperties": false,
+            "description": "The settings file and whether it is applied; null before it was first read."
+          },
+          {
+            "type": "null"
+          }
+        ]
+      },
+      "Member": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "teams": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The teams' names."
+          },
+          "chats": {
+            "type": "integer",
+            "description": "Open chats they answer."
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "available",
+              "away",
+              "offline"
+            ],
+            "description": "Available: their Live Chat screen is open and they are not away."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "teams",
+          "chats",
+          "state"
+        ],
+        "additionalProperties": false
+      },
+      "Team": {
+        "type": "object",
+        "properties": {
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Member"
+            }
+          }
+        },
+        "required": [
+          "members"
+        ],
+        "additionalProperties": false
+      },
+      "Me": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "away": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "away"
+        ],
+        "additionalProperties": false
+      },
+      "Away": {
+        "type": "object",
+        "properties": {
+          "away": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "away"
+        ],
+        "additionalProperties": false
+      },
+      "FileView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "size"
+        ],
+        "additionalProperties": false
+      },
+      "Line": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "description": "Its event's sequence number: lines are in this order."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "visitor",
+              "agent",
+              "system"
+            ]
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FileView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "event": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "System lines: started, joined, handed, closed, ticket, ticket-asked, lead, ask-email or articles."
+          },
+          "data": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "shown": {
+            "type": "boolean",
+            "description": "Whether the visitor's window shows it."
+          },
+          "clientId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The sender's own id for the line: the same id sent twice adds it once."
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "kind",
+          "author",
+          "text",
+          "at",
+          "file",
+          "event",
+          "data",
+          "shown",
+          "clientId"
+        ],
+        "additionalProperties": false
+      },
+      "ChatSummary": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer"
+          },
+          "site": {
+            "type": "string"
+          },
+          "team": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "routedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The page rule that chose the team."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
+          "visitor": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "language": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "device": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "desktop",
+                  "phone",
+                  "tablet",
+                  null
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "email",
+              "language",
+              "device"
+            ],
+            "additionalProperties": false
+          },
+          "page": {
+            "type": "string",
+            "description": "The path the chat started on."
+          },
+          "pageTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pageNow": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The path the visitor is on now."
+          },
+          "referrer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The referring site."
+          },
+          "agent": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "firstAnswerAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "waitingSince": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Since when the visitor's last line has had no answer."
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "closedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "agent",
+              "visitor",
+              "idle",
+              null
+            ]
+          },
+          "ticket": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "unanswered",
+                      "left-open",
+                      "agent"
+                    ]
+                  },
+                  "number": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "reason",
+                  "number",
+                  "error"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lead": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "by": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "url",
+                  "at",
+                  "by"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "visitor",
+                      "agent",
+                      "system"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "text",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "number",
+          "site",
+          "team",
+          "routedBy",
+          "status",
+          "visitor",
+          "page",
+          "pageTitle",
+          "pageNow",
+          "referrer",
+          "agent",
+          "createdAt",
+          "lastAt",
+          "firstAnswerAt",
+          "waitingSince",
+          "closedAt",
+          "closedBy",
+          "ticket",
+          "lead",
+          "last"
+        ],
+        "additionalProperties": false
+      },
+      "ChatList": {
+        "type": "object",
+        "properties": {
+          "chats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatSummary"
+            }
+          },
+          "seq": {
+            "type": "integer",
+            "description": "The last event's sequence number when the list was read: open the stream after it."
+          }
+        },
+        "required": [
+          "chats",
+          "seq"
+        ],
+        "additionalProperties": false
+      },
+      "Article": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "excerpt": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "excerpt",
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "ChatDetail": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer"
+          },
+          "site": {
+            "type": "string"
+          },
+          "team": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "routedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The page rule that chose the team."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
+          "visitor": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "language": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "device": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "desktop",
+                  "phone",
+                  "tablet",
+                  null
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "email",
+              "language",
+              "device"
+            ],
+            "additionalProperties": false
+          },
+          "page": {
+            "type": "string",
+            "description": "The path the chat started on."
+          },
+          "pageTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pageNow": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The path the visitor is on now."
+          },
+          "referrer": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The referring site."
+          },
+          "agent": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "firstAnswerAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "waitingSince": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Since when the visitor's last line has had no answer."
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "closedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "agent",
+              "visitor",
+              "idle",
+              null
+            ]
+          },
+          "ticket": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "enum": [
+                      "unanswered",
+                      "left-open",
+                      "agent"
+                    ]
+                  },
+                  "number": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "error": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "reason",
+                  "number",
+                  "error"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lead": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "by": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "url",
+                  "at",
+                  "by"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "visitor",
+                      "agent",
+                      "system"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "text",
+                  "at"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Line"
+            }
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "at",
+                "path",
+                "title"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "articles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Article"
+            }
+          },
+          "answers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "text"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Saved answers for the chat's team, with the visitor's name filled in."
+          },
+          "seq": {
+            "type": "integer",
+            "description": "The last event's sequence number: open the stream after it."
+          }
+        },
+        "required": [
+          "number",
+          "site",
+          "team",
+          "routedBy",
+          "status",
+          "visitor",
+          "page",
+          "pageTitle",
+          "pageNow",
+          "referrer",
+          "agent",
+          "createdAt",
+          "lastAt",
+          "firstAnswerAt",
+          "waitingSince",
+          "closedAt",
+          "closedBy",
+          "ticket",
+          "lead",
+          "last",
+          "lines",
+          "pages",
+          "articles",
+          "answers",
+          "seq"
+        ],
+        "additionalProperties": false
+      },
+      "VisitorInfo": {
+        "type": "object",
+        "properties": {
+          "linked": {
+            "type": "boolean",
+            "description": "Whether Analytics is linked for the chat's site."
+          },
+          "ids": {
+            "type": "boolean",
+            "description": "Whether the window sent Analytics' ids for this visit."
+          },
+          "visit": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "referrer": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "utm": {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "medium": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "campaign": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "medium",
+                      "campaign"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "browser": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "os": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "device": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "startedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "pages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "at": {
+                          "type": "string"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "seconds": {
+                          "type": [
+                            "integer",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "at",
+                        "path",
+                        "title",
+                        "seconds"
+                      ],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": [
+                  "source",
+                  "referrer",
+                  "utm",
+                  "browser",
+                  "os",
+                  "device",
+                  "startedAt",
+                  "pages"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "at",
+                "path",
+                "title"
+              ],
+              "additionalProperties": false
+            },
+            "description": "The pages the window saw while the chat was open."
+          }
+        },
+        "required": [
+          "linked",
+          "ids",
+          "visit",
+          "error",
+          "pages"
+        ],
+        "additionalProperties": false
+      },
+      "AgentMessage": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000
+          },
+          "client_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{8,64}$"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "Assign": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A member's id; null takes the chat from whoever has it."
+          },
+          "team": {
+            "type": "string",
+            "description": "A team id from the settings file."
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "For the team only."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "Question": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "site": {
+            "type": "string"
+          },
+          "team": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": "string"
+          },
+          "page": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "question": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ticket": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why it is not a ticket yet; it is tried again."
+          }
+        },
+        "required": [
+          "id",
+          "site",
+          "team",
+          "name",
+          "email",
+          "page",
+          "language",
+          "question",
+          "at",
+          "ticket",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "Questions": {
+        "type": "object",
+        "properties": {
+          "questions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Question"
+            }
+          }
+        },
+        "required": [
+          "questions"
+        ],
+        "additionalProperties": false
+      },
+      "LinkState": {
+        "type": "object",
+        "properties": {
+          "linked": {
+            "type": "boolean"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "secret": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The environment variable the file names."
+          },
+          "secretSet": {
+            "type": "boolean"
+          },
+          "okAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "errorAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pending": {
+            "type": "integer",
+            "description": "Helpdesk: chats and questions waiting to become tickets."
+          }
+        },
+        "required": [
+          "linked",
+          "url",
+          "secret",
+          "secretSet",
+          "okAt",
+          "errorAt",
+          "error",
+          "pending"
+        ],
+        "additionalProperties": false
+      },
+      "Integrations": {
+        "type": "object",
+        "properties": {
+          "helpdesk": {
+            "$ref": "#/components/schemas/LinkState"
+          },
+          "analytics": {
+            "$ref": "#/components/schemas/LinkState"
+          },
+          "crm": {
+            "$ref": "#/components/schemas/LinkState"
+          },
+          "knowledgeBase": {
+            "$ref": "#/components/schemas/LinkState"
+          }
+        },
+        "required": [
+          "helpdesk",
+          "analytics",
+          "crm",
+          "knowledgeBase"
+        ],
+        "additionalProperties": false
+      },
+      "Hours": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean"
+          },
+          "outside": {
+            "type": "string",
+            "enum": [
+              "form",
+              "hidden"
+            ]
+          },
+          "opensAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "closesAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "available": {
+            "type": "integer",
+            "description": "Members answering now."
+          }
+        },
+        "required": [
+          "open",
+          "outside",
+          "opensAt",
+          "closesAt",
+          "timeZone",
+          "available"
+        ],
+        "additionalProperties": false
+      },
+      "Overview": {
+        "type": "object",
+        "properties": {
+          "timeZone": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "object",
+            "properties": {
+              "open": {
+                "type": "boolean"
+              },
+              "outside": {
+                "type": "string",
+                "enum": [
+                  "form",
+                  "hidden"
+                ]
+              },
+              "opensAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "closesAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "timeZone": {
+                "type": "string"
+              },
+              "available": {
+                "type": "integer",
+                "description": "Members answering now."
+              },
+              "text": {
+                "type": "string"
+              },
+              "described": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "open",
+              "outside",
+              "opensAt",
+              "closesAt",
+              "timeZone",
+              "available",
+              "text",
+              "described"
+            ],
+            "additionalProperties": false
+          },
+          "chats": {
+            "type": "integer",
+            "description": "Chats today."
+          },
+          "chatsLastWeek": {
+            "type": "integer",
+            "description": "The same day last week."
+          },
+          "firstAnswer": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "Median, in ms."
+          },
+          "firstAnswerTrend": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "The median of each of the last 14 days, in ms; 0 for days without answers."
+          },
+          "slow": {
+            "type": "integer",
+            "description": "Chats today not answered within chats.slow_answer."
+          },
+          "slowAfter": {
+            "type": "integer"
+          },
+          "tickets": {
+            "type": "integer"
+          },
+          "ticketsAfterHours": {
+            "type": "integer"
+          },
+          "leads": {
+            "type": "integer"
+          },
+          "perHour": {
+            "type": "object",
+            "properties": {
+              "today": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              },
+              "lastWeek": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            },
+            "required": [
+              "today",
+              "lastWeek"
+            ],
+            "additionalProperties": false
+          },
+          "startedOn": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "page": {
+                  "type": "string"
+                },
+                "chats": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "page",
+                "chats"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "team": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Member"
+            }
+          },
+          "open": {
+            "type": "integer"
+          },
+          "waiting": {
+            "type": "integer"
+          },
+          "questions": {
+            "type": "integer",
+            "description": "Questions outside hours in the last 7 days."
+          },
+          "file": {
+            "$ref": "#/components/schemas/ConfigFile"
+          }
+        },
+        "required": [
+          "timeZone",
+          "hours",
+          "chats",
+          "chatsLastWeek",
+          "firstAnswer",
+          "firstAnswerTrend",
+          "slow",
+          "slowAfter",
+          "tickets",
+          "ticketsAfterHours",
+          "leads",
+          "perHour",
+          "startedOn",
+          "team",
+          "open",
+          "waiting",
+          "questions",
+          "file"
+        ],
+        "additionalProperties": false
+      },
+      "Report": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "chats": {
+                "type": "integer"
+              },
+              "answered": {
+                "type": "integer"
+              },
+              "firstAnswer": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "slow": {
+                "type": "integer"
+              },
+              "questions": {
+                "type": "integer"
+              },
+              "tickets": {
+                "type": "object",
+                "properties": {
+                  "unanswered": {
+                    "type": "integer"
+                  },
+                  "leftOpen": {
+                    "type": "integer"
+                  },
+                  "agent": {
+                    "type": "integer"
+                  },
+                  "afterHours": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "unanswered",
+                  "leftOpen",
+                  "agent",
+                  "afterHours"
+                ],
+                "additionalProperties": false
+              },
+              "leads": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "chats",
+              "answered",
+              "firstAnswer",
+              "slow",
+              "questions",
+              "tickets",
+              "leads"
+            ],
+            "additionalProperties": false
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "day": {
+                  "type": "string"
+                },
+                "chats": {
+                  "type": "integer"
+                },
+                "tickets": {
+                  "type": "integer"
+                },
+                "leads": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "day",
+                "chats",
+                "tickets",
+                "leads"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "byHour": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "description": "Chats started, Monday first, by hour in the hours' time zone."
+          },
+          "byPage": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "page": {
+                  "type": "string"
+                },
+                "chats": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "page",
+                "chats"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "byTeam": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "chats": {
+                  "type": "integer"
+                },
+                "firstAnswer": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "tickets": {
+                  "type": "integer"
+                },
+                "leads": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "chats",
+                "firstAnswer",
+                "tickets",
+                "leads"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "days",
+          "timeZone",
+          "totals",
+          "series",
+          "byHour",
+          "byPage",
+          "byTeam"
+        ],
+        "additionalProperties": false
+      },
+      "Settings": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The applied settings, as the settings file sets them; null before it is applied."
+          },
+          "yaml": {
+            "type": "string"
+          },
+          "file": {
+            "$ref": "#/components/schemas/ConfigFile"
+          }
+        },
+        "required": [
+          "config",
+          "yaml",
+          "file"
+        ],
+        "additionalProperties": false
+      },
+      "WidgetState": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean"
+          },
+          "outside": {
+            "type": "string",
+            "enum": [
+              "form",
+              "hidden"
+            ]
+          },
+          "opensAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "closesAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "available": {
+            "type": "integer",
+            "description": "Members answering now."
+          },
+          "site": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "open",
+          "outside",
+          "opensAt",
+          "closesAt",
+          "timeZone",
+          "available",
+          "site"
+        ],
+        "additionalProperties": false
+      },
+      "Suggested": {
+        "type": "object",
+        "properties": {
+          "articles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Article"
+            }
+          }
+        },
+        "required": [
+          "articles"
+        ],
+        "additionalProperties": false
+      },
+      "VisitorLine": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "visitor",
+              "agent",
+              "system"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The agent's name; null for the visitor's own lines."
+          },
+          "text": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "integer"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "Relative to Live Chat's address; signed, for this chat only."
+                  }
+                },
+                "required": [
+                  "name",
+                  "type",
+                  "size",
+                  "url"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "event": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "data": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "clientId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "kind",
+          "name",
+          "text",
+          "at",
+          "file",
+          "event",
+          "data",
+          "clientId"
+        ],
+        "additionalProperties": false
+      },
+      "VisitorState": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
+          "agent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ticket": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "email": {
+            "type": "boolean",
+            "description": "Whether the visitor left an email."
+          }
+        },
+        "required": [
+          "status",
+          "agent",
+          "ticket",
+          "email"
+        ],
+        "additionalProperties": false
+      },
+      "VisitorChat": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/VisitorState"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisitorLine"
+            }
+          },
+          "seq": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state",
+          "lines",
+          "seq"
+        ],
+        "additionalProperties": false
+      },
+      "StartChat": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000
+          },
+          "client_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{8,64}$"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Required on sites with ask_email."
+          },
+          "page": {
+            "type": "string",
+            "format": "uri",
+            "description": "The page's address, on one of the site's hosts. Only its path is kept."
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "referrer": {
+            "type": "string",
+            "description": "document.referrer; only its host is kept."
+          },
+          "language": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "phone",
+              "tablet"
+            ]
+          },
+          "analytics": {
+            "type": "object",
+            "properties": {
+              "visitor": {
+                "type": "string"
+              },
+              "session": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "additionalProperties": false,
+            "description": "openasy.ids() when Analytics' script is on the page."
+          }
+        },
+        "required": [
+          "message",
+          "page"
+        ],
+        "additionalProperties": false
+      },
+      "ChatStarted": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The chat's secret: send it as Authorization: Bearer. Keep it in the site's own storage; nothing else identifies the visitor."
+          },
+          "chat": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "$ref": "#/components/schemas/VisitorState"
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/VisitorLine"
+                }
+              }
+            },
+            "required": [
+              "state",
+              "lines"
+            ],
+            "additionalProperties": false
+          },
+          "seq": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "token",
+          "chat",
+          "seq"
+        ],
+        "additionalProperties": false
+      },
+      "VisitorMessage": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000
+          },
+          "client_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{8,64}$"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "VisitorDetails": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "email"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "VisitorPage": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "page"
+        ],
+        "additionalProperties": false
+      },
+      "AskQuestion": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000
+          },
+          "page": {
+            "type": "string",
+            "format": "uri"
+          },
+          "language": {
+            "type": "string"
+          },
+          "website": {
+            "type": "string",
+            "description": "Leave empty: a hidden field that only bots fill."
+          }
+        },
+        "required": [
+          "email",
+          "question"
+        ],
+        "additionalProperties": false
+      },
+      "QuestionReceived": {
+        "type": "object",
+        "properties": {
+          "received": {
+            "const": true
+          }
+        },
+        "required": [
+          "received"
+        ],
+        "additionalProperties": false
+      },
+      "CrmLeadRequest": {
+        "type": "object",
+        "properties": {
+          "external_id": {
+            "type": "string",
+            "description": "live-chat-<chat id>: the same chat opens one lead."
+          },
+          "source": {
+            "const": "live-chat"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page": {
+            "type": "string",
+            "description": "The page the chat started on, as a full address."
+          },
+          "title": {
+            "type": "string",
+            "description": "The first question, up to 120 characters."
+          },
+          "owner": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "email": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "email"
+            ],
+            "additionalProperties": false,
+            "description": "The agent who opened it."
+          },
+          "referrer": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "utm": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "medium": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "campaign": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "source",
+                  "medium",
+                  "campaign"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "at": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "at",
+                "path"
+              ],
+              "additionalProperties": false
+            },
+            "description": "The pages the visitor read, oldest first: from Analytics when linked, else from the window."
+          },
+          "transcript": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string",
+                  "enum": [
+                    "visitor",
+                    "agent"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "from",
+                "name",
+                "at",
+                "text"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "chat_url": {
+            "type": "string",
+            "description": "The chat in Live Chat."
+          }
+        },
+        "required": [
+          "external_id",
+          "source",
+          "name",
+          "email",
+          "page",
+          "title",
+          "owner",
+          "referrer",
+          "utm",
+          "pages",
+          "transcript",
+          "chat_url"
+        ],
+        "additionalProperties": false,
+        "description": "What Live Chat sends: POST <crm.url>/api/v1/leads with Authorization: Bearer <the token crm.token names>. Not served by Live Chat."
+      },
+      "CrmLeadCreated": {
+        "type": "object",
+        "properties": {
+          "lead": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "lead"
+        ],
+        "additionalProperties": true,
+        "description": "What CRM answers: 201 for a new lead, 200 for the one the same external_id opened before. Other fields are ignored."
+      }
+    }
+  }
+}

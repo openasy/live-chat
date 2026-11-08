@@ -1,0 +1,42 @@
+# Live Chat. Sites, hours, teams, page rules and the links to other products are in live-chat.yaml; chats are answered
+# in the UI.
+#
+#   openssl rand -hex 32 > openasy-kek   # the product's key: sign-in secrets (ADR 0021). Keep it with your backups
+#   docker compose up -d
+#   docker compose logs live-chat | grep 'no owner yet'   # the one-time link that creates the owner account
+services:
+  live-chat:
+    image: ghcr.io/openasy/live-chat:0.1.0
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    ports:
+      - "127.0.0.1:8080:8080" # UI, API, the window's script and its API; put a TLS proxy in front
+    volumes:
+      - live-chat-data:/data # SQLite database: chats, their lines and files
+      - ./config:/config:ro # live-chat.yaml; mount the folder so an editor's save reaches it
+    secrets:
+      - openasy-kek # mounted at /run/secrets/openasy-kek
+    environment:
+      # The address people and the window's script open Live Chat at. With a TLS proxy, its https:// URL.
+      LIVE_CHAT_PUBLIC_URL: ${LIVE_CHAT_PUBLIC_URL:-http://localhost:8080}
+      LIVE_CHAT_CONFIG: /config/live-chat.yaml
+      # Behind the TLS proxy: rate limits by the visitor's address from X-Forwarded-For.
+      LIVE_CHAT_TRUST_PROXY: "true"
+      # The secrets live-chat.yaml names, never written in the file itself:
+      LIVE_CHAT_HELPDESK_KEY: ${LIVE_CHAT_HELPDESK_KEY:-} # the same as Helpdesk's HELPDESK_LIVE_CHAT_KEY
+      # LIVE_CHAT_ANALYTICS_TOKEN: ${LIVE_CHAT_ANALYTICS_TOKEN} # an Analytics API token with the viewer role
+      # LIVE_CHAT_CRM_TOKEN: ${LIVE_CHAT_CRM_TOKEN}
+      # Sign in with your identity provider (OIDC), see the README:
+      # OPENASY_OIDC_ISSUER: https://login.example.com
+      # OPENASY_OIDC_CLIENT_ID: live-chat
+      # OPENASY_OIDC_CLIENT_SECRET: ${OPENASY_OIDC_CLIENT_SECRET}
+
+volumes:
+  live-chat-data:
+
+secrets:
+  openasy-kek:
+    file: ./openasy-kek

@@ -1,0 +1,133 @@
+/* The few layouts this product needs that @openasy/ui's prebuilt styles do not include. Colours stay in the library's tokens. */
+
+/* The library's preflight already resets lists' margin and padding; its spacing utilities are in a cascade layer that
+   any unlayered rule here would beat, so nothing here sets margin or padding on an element that takes utilities. */
+.lc-list {
+  list-style: none;
+}
+
+.lc-chat:hover:not([aria-current]) {
+  background: var(--oa-canvas);
+}
+
+/* The inbox: the open chats, the conversation and the visitor; one column until the screen is wide. */
+.lc-inbox,
+.lc-side,
+.lc-side-wide,
+.lc-halves {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 1280px) {
+  .lc-inbox {
+    grid-template-columns: 220px minmax(0, 1fr) 280px;
+  }
+  .lc-side {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+  .lc-side-wide {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+  .lc-halves {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .lc-column {
+    align-self: start;
+  }
+}
+
+.lc-team {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 640px) {
+  .lc-team {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .lc-team > li {
+    border-right: 1px solid var(--oa-border-subtle, var(--oa-line));
+  }
+}
+@media (min-width: 1280px) {
+  .lc-team {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.lc-conversation {
+  min-height: 320px;
+  max-height: calc(100vh - 340px);
+  overflow-y: auto;
+}
+.lc-line {
+  max-width: 80%;
+}
+.lc-mine {
+  align-self: flex-end;
+}
+.lc-bubble {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.lc-bubble a {
+  color: inherit;
+}
+.lc-image {
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 6px;
+  display: block;
+}
+
+.lc-composer:focus-within {
+  border-color: var(--oa-accent);
+}
+.lc-textarea {
+  resize: none;
+  border: 0;
+  font: inherit;
+}
+.lc-textarea::placeholder {
+  color: var(--oa-fg-subtle);
+}
+.lc-answers {
+  max-width: 12rem;
+}
+.lc-hand {
+  width: 12rem;
+}
+
+.lc-facts {
+  grid-template-columns: 72px minmax(0, 1fr);
+  margin: 0;
+}
+
+.lc-settings-list {
+  grid-template-columns: minmax(120px, 40%) minmax(0, 1fr);
+  margin: 0;
+}
+
+.lc-code,
+.lc-wrap {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The window's preview on a page of the site. */
+.lc-preview {
+  height: 440px;
+}
+.lc-block {
+  height: 10rem;
+}
+.lc-window {
+  right: 1.25rem;
+  bottom: 1.25rem;
+}
+.lc-window.lc-left {
+  right: auto;
+  left: 1.25rem;
+}
+.lc-swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+}

@@ -1,0 +1,78 @@
+# Live Chat's settings. This file is the only place they are changed; a change is picked up within a minute, and a file
+# with a mistake leaves the last good one in place. Chats are answered in the UI. Secrets are never written here: the
+# file names the environment variables that hold them.
+
+# The sites the window is on: <script src="https://chat.example.com/w/www.js" defer></script> on every page.
+sites:
+  www:
+    host: www.example.com
+    consent: { purpose: support } # wait for Consent: the window appears once the visitor accepts this purpose
+  app:
+    host: app.example.com
+    ask_email: false # signed-in customers: the window does not ask for an email first
+    analytics: app # the site's name in Analytics (the site id by default)
+
+# In these hours the window offers a chat; outside them a form, whose questions become Helpdesk tickets.
+hours:
+  timezone: Europe/Istanbul
+  weekdays: 09:00-18:00
+  holidays: [2026-10-29, 2027-01-01]
+  outside: form # or hidden: no window outside hours
+
+# Who answers. group: an Identity group, as sign-in sends it; members: emails, for teams signed in with passwords. A
+# team with neither is everyone. queue: what Helpdesk gets as the ticket's form, for its routing rules.
+teams:
+  sales: { name: Sales, group: sales, queue: sales }
+  support: { name: Support, group: support, queue: technical }
+
+# A page's chats go to the team of the first rule that matches it; * is any part of a path.
+routes:
+  - { pages: ["/pricing", "/features/*"], team: sales }
+  - { pages: ["/app/*", "/help/*"], team: support }
+  - { pages: ["*"], team: sales }
+
+window:
+  colour: "#1d4ed8"
+  title: Acme Books
+  greeting: { en: "Hello! Ask us anything about Acme Books.", tr: "Merhaba! Acme Books hakkında bize her şeyi sorabilirsiniz." }
+  suggest_articles: true # articles from Knowledge Base as the visitor types
+  privacy: https://www.example.com/privacy
+
+chats:
+  ticket_after: 10m # no answer this long: a Helpdesk ticket, once the visitor's email is known
+  close_after: 30m # no line this long: closed; a question left unanswered becomes a ticket
+  slow_answer: 2m # what the overview counts as answered late
+
+files:
+  types: [image/png, image/jpeg, application/pdf]
+  max_size: 10MB
+
+answers:
+  - id: turkish-invoices
+    title: Invoices in Turkish
+    teams: [sales]
+    text: "Yes, {first_name}: invoices can be in Turkish, English or both, set per buyer."
+  - id: thanks
+    title: Thanks, closing
+    text: "Thank you, {first_name}. I am closing the chat; write here again any time. {agent}"
+
+keep_chats: 2y
+
+# Chats and questions become tickets: Helpdesk's sources.live-chat, with its key.
+helpdesk:
+  url: http://helpdesk:8080
+  key: LIVE_CHAT_HELPDESK_KEY
+
+# The visitor's pages beside the chat: an API token with the viewer role in Analytics.
+# analytics:
+#   url: https://analytics.example.com
+#   token: LIVE_CHAT_ANALYTICS_TOKEN
+
+# Open a lead from a chat. Leave it out and the button is not shown.
+# crm:
+#   url: https://crm.example.com
+#   token: LIVE_CHAT_CRM_TOKEN
+
+# Articles suggested to the visitor and beside the chat.
+# knowledge_base:
+#   url: https://kb.example.com
