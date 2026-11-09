@@ -43,7 +43,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .lc-team > li {
-    border-right: 1px solid var(--oa-border-subtle, var(--oa-line));
+    border-inline-end: 1px solid var(--oa-border-subtle, var(--oa-line));
   }
 }
 @media (min-width: 1280px) {

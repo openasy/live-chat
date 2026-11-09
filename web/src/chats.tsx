@@ -63,7 +63,7 @@ function ChatList({ chats, active, now }: { chats: Chat[]; active: number | null
             <a
               href={`/chats/${c.number}`}
               aria-current={c.number === active ? "true" : undefined}
-              className={`lc-chat flex w-full flex-col gap-0.5 px-3 py-2 text-left no-underline ${c.number === active ? "bg-accent-soft" : ""}`}
+              className={`lc-chat flex w-full flex-col gap-0.5 px-3 py-2 text-start no-underline ${c.number === active ? "bg-accent-soft" : ""}`}
             >
               <span className="flex items-center gap-2">
                 <span className={`truncate text-sm font-medium ${c.number === active ? "text-accent-text" : "text-fg"}`}>{visitorName(c, t)}</span>

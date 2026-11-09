@@ -3,6 +3,7 @@ import { useAuth } from "@openasy/auth/react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { api, MfaSetupRequired, Unauthorized, type Chat, type StreamEvent } from "./api.ts";
 import type { T } from "./i18n.ts";
+import { viewerLocale } from "./i18n.ts";
 
 /** Data loading with the session; when it ends, the sign-in screen comes back. */
 export function useApi() {
@@ -179,7 +180,7 @@ export function Code({ children, label }: { children: ReactNode; label?: string 
 
 // ---------------------------------------------------------------- formatting
 
-export const fmt = (n: number) => n.toLocaleString();
+export const fmt = (n: number) => n.toLocaleString(viewerLocale());
 
 /** A length of time as people say it: 48 s, 3 min, 2 h 12 min. */
 export function duration(ms: number, t: T): string {
@@ -194,7 +195,7 @@ export function duration(ms: number, t: T): string {
   return t("time.minutes", { m });
 }
 
-export const time = (iso: string) => new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+export const time = (iso: string) => new Date(iso).toLocaleTimeString(viewerLocale(), { hour: "2-digit", minute: "2-digit" });
 
 /** Today's time, or yesterday's, or the date. */
 export function when(iso: string, t: T, now = Date.now()) {
@@ -202,11 +203,11 @@ export function when(iso: string, t: T, now = Date.now()) {
   const today = new Date(now);
   if (d.toDateString() === today.toDateString()) return t("time.today", { time: time(iso) });
   if (d.toDateString() === new Date(now - 86_400_000).toDateString()) return t("time.yesterday", { time: time(iso) });
-  return `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })} ${time(iso)}`;
+  return `${d.toLocaleDateString(viewerLocale(), { day: "numeric", month: "short" })} ${time(iso)}`;
 }
 
 /** How long ago, in words and in the page's language: 3 days ago. */
-export function ago(iso: string, locale?: string, now = Date.now()) {
+export function ago(iso: string, locale: string = viewerLocale(), now = Date.now()) {
   const s = Math.round((Date.parse(iso) - now) / 1000);
   const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   const abs = Math.abs(s);

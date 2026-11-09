@@ -34,7 +34,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Chat, Member, Overview, ProductLink, Settings } from "./api.ts";
 import { ChatsPage } from "./chats.tsx";
 import { LiveProvider, useApi, useLive, visitorName } from "./common.tsx";
-import { useT } from "./i18n.ts";
+import { useT, setViewerLocale } from "./i18n.ts";
 import { AfterHoursPage, IntegrationsPage, OverviewPage, ReportsPage, SettingsFilePage, WindowPage } from "./pages.tsx";
 
 const PAGES = ["chats", "after-hours", "window", "reports", "integrations", "settings", "account", "members", "signin", "tokens"] as const;
@@ -248,6 +248,7 @@ export function App() {
   const installBrand = useInstallBrand();
   const [theme] = useThemePreference();
   const [locale] = useLocalePreference();
+  setViewerLocale(locale);
   return (
     // The install's brand from config/brand.env (ADR 0053); OpenAsy's own look where it sets none.
     <BrandProvider theme={theme} locale={locale} brand={{ name: "OpenAsy", organization: undefined, ...installBrand }} className="min-h-screen">

@@ -25,13 +25,13 @@ import { useState } from "react";
 import type { Integrations, LinkState, Overview, Question, Report, Settings } from "./api.ts";
 import { ago, Code, duration, fmt, useLoad, when, type Call } from "./common.tsx";
 import { FileSettingsPage } from "./FileSettings.tsx";
-import { useT, type T } from "./i18n.ts";
+import { useT, type T, viewerLocale } from "./i18n.ts";
 
 const hh = (h: number) => `${String(h).padStart(2, "0")}:00`;
-const shortDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+const shortDay = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString(viewerLocale(), { day: "numeric", month: "short", timeZone: "UTC" });
 /** Monday first, in the page's language. */
 const weekdays = () =>
-  Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(2026, 10, 2 + i)).toLocaleDateString(undefined, { weekday: "short", timeZone: "UTC" }));
+  Array.from({ length: 7 }, (_, i) => new Date(Date.UTC(2026, 10, 2 + i)).toLocaleDateString(viewerLocale(), { weekday: "short", timeZone: "UTC" }));
 /** The hours anything happened in, at least 08:00 to 19:00. */
 function hoursUsed(rows: number[][]) {
   const used = [...Array(24).keys()].filter((h) => rows.some((d) => d[h]! > 0));
