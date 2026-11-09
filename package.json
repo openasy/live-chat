@@ -1,6 +1,6 @@
 {
   "name": "@openasy/live-chat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "OpenAsy Live Chat: a chat window on your site from one script tag, answered by your team in the browser, with the visitor's pages from Analytics; outside working hours the question becomes a Helpdesk ticket.",
   "license": "AGPL-3.0-only",

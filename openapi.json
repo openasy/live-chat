@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "OpenAsy Live Chat API",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "summary": "A chat window on your site from one script tag, answered by your team in the browser, with the visitor's pages from Analytics.",
     "description": "Every screen of Live Chat uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nThe window on a site's pages loads `/w/<site>.js` and talks to `/api/v1/widget/*` from pages of the site's hosts (CORS), with the chat's token once a chat starts. Sites, hours, teams, routing rules, the window's look and the links to Helpdesk, Analytics, CRM and Knowledge Base come from the settings file, never the API. Everything else takes the session of a signed-in person or an API token, and each operation names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003).\n\nBoth the team's screens and the window follow chats with Server-Sent Events whose ids are the events' sequence numbers, and resume after them.\n\nCRM is sent leads with `POST <crm.url>/api/v1/leads`; the request and the answer are described here as `CrmLeadRequest` and `CrmLeadCreated`.\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
     "license": {
